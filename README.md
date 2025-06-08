@@ -131,3 +131,14 @@ All endpoints except `/register` and `/login` require a valid JWT `access_token`
 | `GET` | `/products/<id>`| JWT Required | Fetches details for a single product by its ID. |
 | `POST`| `/checkout`| JWT Required | Processes a mock checkout. Validates stock levels. |
 | `POST`| `/chat` | JWT Required | Saves a user or bot chat message to the database history. |
+
+## 7. Challenges and Learnings
+
+* **Challenge**: Ensuring secure and stateless user sessions.
+    * **Solution**: Implemented JWT (JSON Web Tokens). After a user logs in, a signed token is issued. This token is then required in the `Authorization` header for all subsequent API requests, which the backend validates on every protected endpoint. This avoids storing session state on the server.
+
+* **Challenge**: Creating an intuitive and non-rigid search experience.
+    * **Solution**: Developed a "Smart Search" feature. Instead of simply returning "no results," the backend analyzes the search query. If it matches a known product category, the API returns all products from that category as a helpful suggestion, significantly improving the user experience.
+
+* **Challenge**: Preventing data loss (e.g., shopping cart) on page reloads.
+    * **Solution**: Leveraged the browser's `localStorage` on the frontend. The JavaScript saves a JSON representation of the cart to `localStorage` whenever it's modified and reloads it when the page initializes, creating a seamless and persistent user session.
