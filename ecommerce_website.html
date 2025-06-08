@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShopBot - Your E-Commerce Assistant</title>
+    <style>
+        :root {
+            --primary: #4361ee;
+            --secondary: #3f37c9;
+            --accent: #4895ef;
+            --light: #f8f9fa;
+            --dark: #212529;
+            --success: #4cc9f0;
+            --warning: #f72585;
+        }
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f5f7fa; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .chatbot-container { width: 400px; height: 600px; background-color: white; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); display: flex; flex-direction: column; overflow: hidden; }
+        .chatbot-header { background-color: var(--primary); color: white; padding: 15px 20px; font-weight: bold; display: flex; align-items: center; }
+        .chatbot-header img { width: 30px; margin-right: 10px; }
+        .chatbot-messages { flex: 1; padding: 20px; overflow-y: auto; background-color: #f8f9fa; }
+        .message { margin-bottom: 15px; max-width: 80%; padding: 10px 15px; border-radius: 18px; line-height: 1.4; animation: fadeIn 0.3s ease; }
+        .bot-message { background-color: white; border: 1px solid #e9ecef; border-radius: 18px 18px 18px 4px; align-self: flex-start; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .user-message { background-color: var(--primary); color: white; border-radius: 18px 18px 4px 18px; margin-left: auto; }
+        .timestamp { font-size: 0.7rem; color: #999; margin-top: 5px; }
+        #reset-btn { background: none; border: 1px solid white; color: white; border-radius: 50%; width: 28px; height: 28px; font-size: 1.2rem; margin-left: auto; cursor: pointer; transition: all 0.2s; }
+        #reset-btn:hover { background-color: rgba(255,255,255,0.2); transform: rotate(90deg); }
+        .chatbot-input { display: flex; padding: 15px; border-top: 1px solid #e9ecef; background-color: white; }
+        #user-input { flex: 1; padding: 10px 15px; border: 1px solid #ddd; border-radius: 25px; outline: none; font-size: 1rem; }
+        #send-btn { background-color: var(--primary); color: white; border: none; border-radius: 50%; width: 40px; height: 40px; margin-left: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background-color 0.2s; }
+        #send-btn:hover { background-color: var(--secondary); }
+        .product-card { border: 1px solid #ddd; border-radius: 10px; margin: 10px 0; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.05); overflow: hidden; }
+        .product-card img { width: 100%; height: 120px; object-fit: cover; }
+        .product-card-content { padding: 12px; }
+        .product-title { font-weight: bold; color: var(--secondary); margin-bottom: 5px; }
+        .product-price { color: var(--primary); font-weight: bold; }
+        .product-actions { margin-top: 8px; display: flex; gap: 8px; }
+        .action-btn { padding: 5px 10px; border: none; border-radius: 5px; cursor: pointer; }
+        .filter-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        .filter-btn { background-color: var(--accent); color: white; border: none; border-radius: 15px; padding: 5px 12px; cursor: pointer; font-size: 0.8rem; }
+        .cart-summary { background-color: white; border-radius: 10px; padding: 15px; margin-top: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .cart-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
+        .checkout-btn { background-color: var(--success); color: white; border: none; padding: 8px 15px; border-radius: 5px; margin-top: 10px; cursor: pointer; width: 100%; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <div class="chatbot-container">
+        <div class="chatbot-header">
+            <img src="https://cdn-icons-png.flaticon.com/512/4712/4712035.png" alt="Chatbot">
+            ShopBot
+            <button id="reset-btn" title="Reset Conversation">⟳</button>
+        </div>
+        <div class="chatbot-messages" id="chat-messages"></div>
+        <div class="chatbot-input">
+            <input type="text" id="user-input" placeholder="Type your message..." autocomplete="off">
+            <button id="send-btn">➤</button>
+        </div>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // --- Authentication Check ---
+    const token = localStorage.getItem('jwt_token');
+    if (!token) {
+        window.location.href = 'login.html';
+        return;
+    }
+
+    // --- Element References ---
+    const chatMessages = document.getElementById('chat-messages');
+    const userInput = document.getElementById('user-input');
+    const sendBtn = document.getElementById('send-btn');
+    const resetBtn = document.getElementById('reset-btn');
+
+    // --- API and State ---
+    const API_BASE_URL = 'http://localhost:5000';
+    let cart = JSON.parse(localStorage.getItem('shoppingCart')) || [];
+
+    // --- Initial Setup ---
+    addBotMessage("Welcome back! How can I assist you? Type 'help' to see commands.");
+
+    // --- Event Listeners ---
+    sendBtn.addEventListener('click', sendMessage);
+    userInput.addEventListener('keypress', e => { if (e.key === 'Enter') sendMessage(); });
+    resetBtn.addEventListener('click', resetConversation);
+
+    // --- Core Functions ---
+    function sendMessage() {
+        const message = userInput.value.trim();
+        if (message === '') return;
+        addUserMessage(message);
+        userInput.value = '';
+        processUserInput(message);
+    }
+
+    function processUserInput(input) {
+            const lowerInput = input.toLowerCase();
+
+            if (lowerInput.includes('help')) {
+                showHelp();
+            } else if (lowerInput.includes('search') || lowerInput.includes('find')) {
+                searchProducts(input.replace(/search|find/gi, '').trim());
+            } else if (lowerInput.includes('categories')) {
+                showCategories();
+            } else if (lowerInput.includes('cart')) {
+                showCart();
+            } else if (lowerInput.includes('add to cart')) {
+                addToCart(extractId(input));
+            } else if (lowerInput.includes('remove from cart')) {
+                removeFromCart(extractId(input));
+            } else if (lowerInput.includes('checkout')) {
+                checkout();
+            } else if (lowerInput.includes('details')) {
+                getProductDetails(extractId(input));
+            } else if (lowerInput.includes('logout')) {
+                logout();
+            } else {
+                // Default action if no other command matches is to search
+                searchProducts(input);
+            }
+        }
+
+    // --- Secure Fetch Wrapper ---
+    function authenticatedFetch(url, options = {}) {
+        const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+        options.headers = { ...options.headers, ...headers };
+        return fetch(url, options).then(handleResponse);
+    }
+
+    function handleResponse(response) {
+        if (response.status === 401) {
+            logout();
+            throw new Error('Session expired. Please log in again.');
+        }
+        if (!response.ok) return response.json().then(error => { throw new Error(error.error || 'A network error occurred.') });
+        return response.json();
+    }
+
+    function handleError(error) {
+        console.error('API Error:', error);
+        addBotMessage(`Sorry, there was an error: ${error.message}`);
+    }
+
+    // --- UI and Message Functions ---
+    function addUserMessage(text) {
+        const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message user-message';
+        messageDiv.innerText = text;
+        messageDiv.innerHTML += `<div class="timestamp">${timestamp}</div>`;
+        chatMessages.appendChild(messageDiv);
+        scrollToBottom();
+        saveMessageToHistory('user', text);
+    }
+
+    function addBotMessage(html) {
+        const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message bot-message';
+        messageDiv.innerHTML = `${html}<div class="timestamp">${timestamp}</div>`;
+        chatMessages.appendChild(messageDiv);
+        scrollToBottom();
+        const textContent = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+        saveMessageToHistory('bot', textContent);
+    }
+
+    function saveMessageToHistory(sender, message) {
+        authenticatedFetch(`${API_BASE_URL}/chat`, {
+            method: 'POST',
+            body: JSON.stringify({ sender, message })
+        }).catch(err => console.error("Could not save chat history:", err));
+    }
+
+    function scrollToBottom() {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function resetConversation() {
+        chatMessages.innerHTML = '';
+        cart = [];
+        localStorage.setItem('shoppingCart', JSON.stringify(cart));
+        addBotMessage("Conversation reset. How can I help you?");
+    }
+
+    function extractId(input) {
+        const match = input.match(/\d+/);
+        return match ? parseInt(match[0]) : null;
+    }
+
+    function logout() {
+        localStorage.removeItem('jwt_token');
+        localStorage.removeItem('shoppingCart');
+        window.location.href = 'login.html';
+    }
+
+    function showHelp() {
+        addBotMessage(`<strong>Here's what I can do:</strong><br>• <u>Search</u>: "find wireless earbuds"<br>• <u>Categories</u>: "show categories"<br>• <u>Cart</u>: "add to cart 2", "view cart"<br>• <u>Logout</u>: "logout"`);
+    }
+
+    // --- API Call Functions ---
+    function showCategories() {
+        authenticatedFetch(`${API_BASE_URL}/products`)
+            .then(products => {
+                const categories = [...new Set(products.map(p => p.category))];
+                let message = "<strong>Click a category to browse:</strong><div class='filter-buttons'>";
+                categories.forEach(cat => {
+                    message += `<button class="filter-btn" onclick="window.searchCategory('${cat}')">${cat}</button>`;
+                });
+                message += "</div>";
+                addBotMessage(message);
+            }).catch(handleError);
+    }
+
+    window.searchCategory = function(category) {
+        addUserMessage(`Search ${category}`);
+        searchProducts(category, true);
+    };
+
+    function searchProducts(query, isCategory = false) {
+        if (!query) return addBotMessage("Please provide a search term.");
+        const endpoint = isCategory ? `${API_BASE_URL}/products?category=${encodeURIComponent(query)}` : `${API_BASE_URL}/products?query=${encodeURIComponent(query)}`;
+        authenticatedFetch(endpoint).then(response => {
+            if (response.suggestion) {
+                addBotMessage(`I found ${response.products.length} items in the suggested <strong>${response.category}</strong> category:`);
+                displayProducts(response.products);
+            } else if (response.length === 0) {
+                addBotMessage(`I couldn't find any products matching '${query}'.`);
+            } else {
+                addBotMessage(`<strong>Found ${response.length} product(s):</strong>`);
+                displayProducts(response);
+            }
+        }).catch(handleError);
+    }
+
+    function displayProducts(products) {
+        let message = '';
+        products.forEach(p => {
+            message += `<div class="product-card"><img src="${API_BASE_URL}/${p.image_url}" alt="${p.name}"><div class="product-card-content"><div class="product-title">${p.name} (ID: ${p.id})</div><div class="product-price">$${p.price.toFixed(2)}</div><div class="product-actions"><button class="action-btn" onclick="window.addToCart(${p.id})">Add</button><button class="action-btn" onclick="window.getProductDetails(${p.id})">Details</button></div></div></div>`;
+        });
+        addBotMessage(message);
+    }
+
+    window.getProductDetails = function(productId) {
+        if (!productId) return addBotMessage("Please specify a product ID.");
+        authenticatedFetch(`${API_BASE_URL}/products/${productId}`)
+            .then(p => addBotMessage(`<strong>Product Details:</strong><div class="product-card"><img src="${p.image_url}" alt="${p.name}"><div class="product-card-content"><div class="product-title">${p.name} (ID: ${p.id})</div><div><strong>Price:</strong> $${p.price.toFixed(2)}</div><div><strong>In Stock:</strong> ${p.stock}</div><div><strong>Description:</strong> ${p.description}</div></div></div>`))
+            .catch(handleError);
+    };
+
+    // --- Cart Management ---
+    window.addToCart = function(productId) {
+        if (!productId) return;
+        authenticatedFetch(`${API_BASE_URL}/products/${productId}`).then(product => {
+            if (product.stock === 0) return addBotMessage(`Sorry, ${product.name} is out of stock.`);
+            const item = cart.find(i => i.product_id === productId);
+            if (item) item.quantity++;
+            else cart.push({ product_id: productId, name: product.name, price: product.price, quantity: 1 });
+            localStorage.setItem('shoppingCart', JSON.stringify(cart));
+            addBotMessage(`Added <strong>${product.name}</strong> to cart.`);
+        }).catch(handleError);
+    };
+
+    window.removeFromCart = function(productId) {
+        const itemIndex = cart.findIndex(i => i.product_id === productId);
+        if (itemIndex > -1) {
+            if (cart[itemIndex].quantity > 1) cart[itemIndex].quantity--;
+            else cart.splice(itemIndex, 1);
+            localStorage.setItem('shoppingCart', JSON.stringify(cart));
+        }
+        showCart();
+    };
+
+    function showCart() {
+        if (cart.length === 0) return addBotMessage("Your cart is empty.");
+        let message = '<strong>Your Shopping Cart</strong><div class="cart-summary">';
+        let total = 0;
+        cart.forEach(item => {
+            const itemTotal = item.price * item.quantity;
+            total += itemTotal;
+            message += `<div class="cart-item"><div>${item.name} (${item.quantity} × $${item.price.toFixed(2)})</div><div>$${itemTotal.toFixed(2)}<button onclick="window.removeFromCart(${item.product_id})" style="background:none;border:none;color:red;cursor:pointer;margin-left:5px;">×</button></div></div>`;
+        });
+        message += `<div style="text-align:right;font-weight:bold;margin-top:10px;">Total: $${total.toFixed(2)}</div><button class="checkout-btn" onclick="window.checkout()">Checkout</button></div>`;
+        addBotMessage(message);
+    }
+
+    window.checkout = function() {
+        if (cart.length === 0) return;
+        const payload = { items: cart.map(item => ({ product_id: item.product_id, quantity: item.quantity })) };
+        authenticatedFetch(`${API_BASE_URL}/checkout`, { method: 'POST', body: JSON.stringify(payload) })
+            .then(data => {
+                addBotMessage(`<strong>Order Successful! 🎉</strong><div class="cart-summary"><div>Order ID: ${data.order_id}</div><div>Total: $${data.total.toFixed(2)}</div><div>${data.message}</div></div>`);
+                cart = [];
+                localStorage.setItem('shoppingCart', JSON.stringify(cart));
+            }).catch(handleError);
+    };
+});
+</script>
+</body>
+</html>
