@@ -1,5 +1,5 @@
 # E-commerce Sales Chatbot🤖
-**Live Demo:** [View Project](https://namratha1305.github.io/E-commerce-Chatbot/)
+**Live Demo:** [View Project](file:///C:/Users/namra/OneDrive/Desktop/ecommerce-chatbot/ecommerce_website.html)
 
 ## 1. Project Summary
 
