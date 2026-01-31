@@ -2,6 +2,11 @@ import os
 import sqlite3
 import random
 from faker import Faker
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+IMAGES_DIR = os.path.join(BASE_DIR, "images")
+
+print("BASE_DIR:", BASE_DIR)
+print("IMAGES_DIR:", IMAGES_DIR)
 
 # Initialize Faker for generating mock data
 fake = Faker()
